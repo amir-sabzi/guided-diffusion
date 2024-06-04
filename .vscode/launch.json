@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Unconditional Sample",
+      "name": "Unconditional Sampling",
       "type": "python",
       "request": "launch",
       "program": "${workspaceFolder}/scripts/classifier_sample.py",
@@ -32,6 +32,75 @@
         "--num_samples", "10",
         "--classifier_path", "models/256x256_classifier.pt",
         "--model_path", "models/256x256_diffusion_uncond.pt"
+      ]
+    }, 
+    {
+      "name": "Class Conditonal Sampling (64)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/classifier_sample.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "CONDA_ENV_PATH": "${env:CONDA_PREFIX}"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "args": [
+        "--attention_resolutions", "32,16,8",
+        "--class_cond", "True",
+        "--diffusion_steps", "1000",
+        "--dropout", "0.1",
+        "--image_size", "64",
+        "--learn_sigma", "True",
+        "--noise_schedule", "cosine",
+        "--num_channels", "192",
+        "--num_head_channels", "64",
+        "--num_res_blocks", "3",
+        "--resblock_updown", "True",
+        "--use_new_attention_order", "True",
+        "--use_fp16", "True",
+        "--use_scale_shift_norm", "True",
+        "--classifier_scale", "1.0",
+        "--num_samples", "10",
+        "--classifier_path", "models/64x64_classifier.pt",
+        "--classifier_depth", "4",
+        "--model_path", "models/64x64_diffusion.pt"
+      ]
+    },
+    {
+      "name": "Grad Conditonal Sampling (64)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/grad_guided_sample.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "CONDA_ENV_PATH": "${env:CONDA_PREFIX}"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "args": [
+        "--attention_resolutions", "32,16,8",
+        "--class_cond", "True",
+        "--diffusion_steps", "1000",
+        "--dropout", "0.1",
+        "--use_ddim", "True",
+        "--image_size", "64",
+        "--batch_size", "1",
+        "--data_dir", "/scratch/dpgen/ILSVRC/Data/CLS-LOC/10_downsampled_train",
+        "--learn_sigma", "True",
+        "--noise_schedule", "cosine",
+        "--num_channels", "192",
+        "--num_head_channels", "64",
+        "--num_res_blocks", "3",
+        "--resblock_updown", "True",
+        "--use_new_attention_order", "True",
+        "--use_fp16", "True",
+        "--use_scale_shift_norm", "True",
+        "--classifier_scale", "1.0",
+        "--num_samples", "10",
+        "--classifier_path", "models/64x64_classifier.pt",
+        "--classifier_depth", "4",
+        "--model_path", "models/64x64_diffusion.pt"
       ]
     }
   ]
