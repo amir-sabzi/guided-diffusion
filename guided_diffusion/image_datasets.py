@@ -43,6 +43,7 @@ def load_data(
     if class_cond:
         # Assume classes are the first part of the filename,
         # before an underscore.
+        
         class_names = [bf.basename(path).split("_")[0] for path in all_files]
         sorted_classes = {x: i for i, x in enumerate(sorted(set(class_names)))}
         classes = [sorted_classes[x] for x in class_names]
@@ -63,8 +64,9 @@ def load_data(
         loader = DataLoader(
             dataset, batch_size=batch_size, shuffle=True, num_workers=1, drop_last=True
         )
-    while True:
-        yield from loader
+    return loader
+    # while True:
+    #     yield from loader
 
 
 def _list_image_files_recursively(data_dir):

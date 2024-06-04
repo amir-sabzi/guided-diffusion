@@ -71,6 +71,9 @@ def classifier_and_diffusion_defaults():
     return res
 
 
+
+#NOTE: What is the model and what is the diffusion
+
 def create_model_and_diffusion(
     image_size,
     class_cond,
@@ -96,6 +99,15 @@ def create_model_and_diffusion(
     use_fp16,
     use_new_attention_order,
 ):
+    # NOTE: Model returns a UNetModel object (Based on what I have learned UNET are used for denoising step stage of DM. )
+    """
+    Diffusion models commonly utilize U-Net architectures for the denoising step in the reverse diffusion process. Specifically:
+    - The U-Net is used to predict the noise that needs to be removed from the current noisy image to obtain the denoised image at the previous timestep.
+    - The U-Net takes the noisy image and the timestep embedding as input and outputs the predicted noise to be subtracted from the noisy image.
+    - The U-Net architecture, with its encoder-decoder structure and skip connections, allows effective fusion of low-level and high-level features, which is beneficial for the denoising task.
+    - The U-Net architecture used in diffusion models is often conditioned on the timestep embedding, either through adaptive layer normalization or cross-attention blocks, to modulate its behavior based on the current noise level.
+    - Some diffusion models like Latent Diffusion use a U-Net in the latent space instead of operating directly on pixel space, which can be more computationally efficient.
+    """
     model = create_model(
         image_size,
         num_channels,
@@ -114,6 +126,10 @@ def create_model_and_diffusion(
         use_fp16=use_fp16,
         use_new_attention_order=use_new_attention_order,
     )
+    
+    
+    
+    
     diffusion = create_gaussian_diffusion(
         steps=diffusion_steps,
         learn_sigma=learn_sigma,
