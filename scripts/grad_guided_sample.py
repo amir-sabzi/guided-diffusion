@@ -4,12 +4,14 @@ process towards more realistic images.
 """
 
 import argparse
-import os
 
 import numpy as np
 import torch as th
 import torch.distributed as dist
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
+import datetime
+import os
 
 from guided_diffusion import dist_util, logger
 from guided_diffusion.image_datasets import load_data
@@ -24,11 +26,43 @@ from guided_diffusion.script_util import (
 )
 
 
+
+def save_images(images, filename, plot_dir):
+    """
+    Saves a batch of images to the specified directory.
+    
+    Args:
+    images (Tensor): Batch of images.
+    filename (str): Filename for the saved plot.
+    plot_dir (str): Directory to save the plots.
+    """
+    # Create a directory for plots if it doesn't exist
+    os.makedirs(plot_dir, exist_ok=True)
+    
+    # Plot and save images
+    num_images = len(images)
+    fig, axs = plt.subplots(1, num_images, figsize=(num_images * 2, 2))
+    if num_images == 1:
+        axs = [axs]  # Make it iterable if there's only one subplot
+    for i, img in enumerate(images):
+        axs[i].imshow(img)
+        axs[i].axis('off')
+    plt.savefig(os.path.join(plot_dir, filename))
+    plt.close(fig)
+
+
 def main():
     args = create_argparser().parse_args()
 
     dist_util.setup_dist()
-    logger.configure()
+
+    log_dir = dir = os.path.join(
+            "logs",
+            datetime.datetime.now().strftime("openai-%Y-%m-%d-%H-%M-%S-%f"),
+        ) 
+    
+    os.makedirs(log_dir, exist_ok=True) 
+    logger.configure(dir=log_dir)
 
     logger.log("creating model and diffusion...")
 
@@ -85,6 +119,7 @@ def main():
         return grad_params_tensor
 
     def cond_fn(x_t, t, y=None, x_0=None): 
+        # return 0
         with th.enable_grad():
             # Ensure x_t and x_0 are not detached and have requires_grad=True
             x_t = x_t.clone().detach().requires_grad_(True)
@@ -99,6 +134,7 @@ def main():
             
             # Score function is the \|grads_x_t - grads_x_0\|_2^2
             score_fn = th.norm(grads_x_t - grads_x_0, p=2)**2
+            # print("score_fn:", score_fn)
             scores = th.autograd.grad(score_fn, x_t, retain_graph=True)[0] * args.classifier_scale
             return scores
              
@@ -108,13 +144,18 @@ def main():
     logger.log("sampling...")
     all_images = []
     all_labels = []
-    while len(all_images) * args.batch_size < args.num_samples:
+    plot_dir = os.path.join(log_dir, "plots")   
+    for i in range(args.num_samples):
         model_kwargs = {}
         classes = th.randint(
             low=0, high=NUM_CLASSES, size=(args.batch_size,), device=dist_util.dev()
         )
         x, extra = next(data_iter)
         y = extra["y"]
+
+        
+        
+
 
         # put data and labels on the same device as the model
         model_kwargs["x_0"], model_kwargs["y"] = x.to(dist_util.dev()), y.to(dist_util.dev()) 
@@ -136,27 +177,22 @@ def main():
             device=dist_util.dev(),
         )
 
+
+        x = ((x + 1) * 127.5).clamp(0, 255).to(th.uint8)
+        x = x.permute(0, 2, 3, 1)
+        x = x.contiguous().cpu().numpy()
+        save_images(x, f"original_{i}.png", plot_dir)
+
+
         sample = ((sample + 1) * 127.5).clamp(0, 255).to(th.uint8)
         sample = sample.permute(0, 2, 3, 1)
-        sample = sample.contiguous()
+        sample = sample.contiguous().cpu().numpy()
+        
+        save_images(sample, f"sample_{i}.png", plot_dir) 
 
-        gathered_samples = [th.zeros_like(sample) for _ in range(dist.get_world_size())]
-        dist.all_gather(gathered_samples, sample)  # gather not supported with NCCL
-        all_images.extend([sample.cpu().numpy() for sample in gathered_samples])
-        gathered_labels = [th.zeros_like(classes) for _ in range(dist.get_world_size())]
-        dist.all_gather(gathered_labels, classes)
-        all_labels.extend([labels.cpu().numpy() for labels in gathered_labels])
-        logger.log(f"created {len(all_images) * args.batch_size} samples")
 
-    arr = np.concatenate(all_images, axis=0)
-    arr = arr[: args.num_samples]
-    label_arr = np.concatenate(all_labels, axis=0)
-    label_arr = label_arr[: args.num_samples]
-    if dist.get_rank() == 0:
-        shape_str = "x".join([str(x) for x in arr.shape])
-        out_path = os.path.join(logger.get_dir(), f"samples_{shape_str}.npz")
-        logger.log(f"saving to {out_path}")
-        np.savez(out_path, arr, label_arr)
+        logger.log(f"created {i+1} samples")
+
 
     dist.barrier()
     logger.log("sampling complete")
