@@ -3,7 +3,6 @@ import random
 
 from PIL import Image
 import blobfile as bf
-from mpi4py import MPI
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 
@@ -51,8 +50,8 @@ def load_data(
         image_size,
         all_files,
         classes=classes,
-        shard=MPI.COMM_WORLD.Get_rank(),
-        num_shards=MPI.COMM_WORLD.Get_size(),
+        shard=0, # Set shard to 0 as there's only one process
+        num_shards=MPI.COMM_WORLD.Get_size(), # Set num_shards to 1 as there's only one process
         random_crop=random_crop,
         random_flip=random_flip,
     )
