@@ -55,7 +55,7 @@ def save_images(images, filename, plot_dir):
     plt.savefig(os.path.join(plot_dir, filename))
     plt.close(fig)
     
-def create_gif(images_array, filename, gif_dir, duration=1):
+def create_gif(images_array, filename, gif_dir, duration=0.4):
     """
     Create a GIF from a list of images.
     
