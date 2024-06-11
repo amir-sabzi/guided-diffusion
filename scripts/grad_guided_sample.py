@@ -12,6 +12,8 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import datetime
 import os
+import imageio
+
 
 from guided_diffusion import dist_util, logger
 from guided_diffusion.image_datasets import load_data
@@ -36,6 +38,9 @@ def save_images(images, filename, plot_dir):
     filename (str): Filename for the saved plot.
     plot_dir (str): Directory to save the plots.
     """
+    images = ((images + 1) * 127.5).clamp(0, 255).to(th.uint8)
+    images = images.permute(0, 2, 3, 1)
+    images = images.contiguous().cpu().numpy()
     # Create a directory for plots if it doesn't exist
     os.makedirs(plot_dir, exist_ok=True)
     
@@ -49,6 +54,26 @@ def save_images(images, filename, plot_dir):
         axs[i].axis('off')
     plt.savefig(os.path.join(plot_dir, filename))
     plt.close(fig)
+    
+def create_gif(images_array, filename, gif_dir, duration=1):
+    """
+    Create a GIF from a list of images.
+    
+    Args:
+    images (Tensor): List of images (Tensor).
+    filename (str): Filename for the saved GIF.
+    gif_dir (str): Directory to save the GIF.
+    duration (float): Duration (in seconds) of each frame in the GIF.
+    """
+    # Create a directory for GIFs if it doesn't exist
+    os.makedirs(gif_dir, exist_ok=True)
+    
+    # Transform each image in images_array to numpy arrays with shape (64, 64, 3)
+    images_array = [((image.squeeze(0) + 1) * 127.5).clamp(0, 255).to(th.uint8).permute(1, 2, 0).contiguous().cpu().numpy() for image in images_array]
+    # Save frames as GIF
+
+    gif_path = os.path.join(gif_dir, filename)
+    imageio.mimsave(gif_path, images_array, duration=duration)
 
 
 def main():
@@ -66,7 +91,7 @@ def main():
 
     logger.log("creating model and diffusion...")
 
-    
+    logger.arg_logger(args) 
      
     model, diffusion = create_model_and_diffusion(
         **args_to_dict(args, model_and_diffusion_defaults().keys())
@@ -134,6 +159,8 @@ def main():
             
             # Score function is the \|grads_x_t - grads_x_0\|_2^2
             score_fn = th.norm(grads_x_t - grads_x_0, p=2)**2
+            logger.logkv("score_fn", score_fn.item())
+            # logger.dumpkvs()
             # print("score_fn:", score_fn)
             scores = th.autograd.grad(score_fn, x_t, retain_graph=True)[0] * args.classifier_scale
             return scores
@@ -142,8 +169,6 @@ def main():
         return model(x, t, y, x_0)
 
     logger.log("sampling...")
-    all_images = []
-    all_labels = []
     plot_dir = os.path.join(log_dir, "plots")   
     for i in range(args.num_samples):
         model_kwargs = {}
@@ -154,8 +179,6 @@ def main():
         y = extra["y"]
 
         
-        
-
 
         # put data and labels on the same device as the model
         model_kwargs["x_0"], model_kwargs["y"] = x.to(dist_util.dev()), y.to(dist_util.dev()) 
@@ -168,7 +191,7 @@ def main():
         )
         
         
-        sample = sample_fn(
+        sample, diffusion_step = sample_fn(
             model_fn,
             (args.batch_size, 3, args.image_size, args.image_size),
             clip_denoised=args.clip_denoised,
@@ -177,19 +200,11 @@ def main():
             device=dist_util.dev(),
         )
 
-
-        x = ((x + 1) * 127.5).clamp(0, 255).to(th.uint8)
-        x = x.permute(0, 2, 3, 1)
-        x = x.contiguous().cpu().numpy()
         save_images(x, f"original_{i}.png", plot_dir)
 
-
-        sample = ((sample + 1) * 127.5).clamp(0, 255).to(th.uint8)
-        sample = sample.permute(0, 2, 3, 1)
-        sample = sample.contiguous().cpu().numpy()
-        
         save_images(sample, f"sample_{i}.png", plot_dir) 
 
+        create_gif(diffusion_step, f"diffusion_{i}.gif", plot_dir)
 
         logger.log(f"created {i+1} samples")
 

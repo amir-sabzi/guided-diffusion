@@ -14,6 +14,7 @@ import tempfile
 import warnings
 from collections import defaultdict
 from contextlib import contextmanager
+from argparse import Namespace
 
 DEBUG = 10
 INFO = 20
@@ -493,3 +494,37 @@ def scoped_configure(dir=None, format_strs=None, comm=None):
         Logger.CURRENT.close()
         Logger.CURRENT = prevlogger
 
+
+
+# ================================================================
+# Utils
+# ================================================================
+
+# A logger that logs all arguments that are provided to it
+def format_namespace(namespace, indent=0):
+    formatted_lines = []
+    for k, v in vars(namespace).items():
+        if isinstance(v, Namespace):
+            formatted_lines.append(f"{'  ' * indent}{k}:")
+            formatted_lines.extend(format_namespace(v, indent + 1))
+        else:
+            formatted_lines.append(f"{'  ' * indent}{k}: {v}")
+    return formatted_lines
+
+def arg_logger(*args, **kwargs):
+    log("Arguments:")
+    for k, v in sorted(kwargs.items()):
+        if isinstance(v, Namespace):
+            log(f"{k}:")
+            for line in format_namespace(v, 1):
+                log(line)
+        else:
+            log(f"{k}: {v}")
+    
+    for i, v in enumerate(args):
+        if isinstance(v, Namespace):
+            log(f"{i}-th positional arg:")
+            for line in format_namespace(v, 1):
+                log(line)
+        else:
+            log(f"{i}-th positional arg: {v}")

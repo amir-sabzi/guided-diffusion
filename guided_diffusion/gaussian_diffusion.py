@@ -13,7 +13,7 @@ import torch as th
 
 from .nn import mean_flat
 from .losses import normal_kl, discretized_gaussian_log_likelihood
-
+from guided_diffusion import dist_util, logger
 
 def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
     """
@@ -363,6 +363,8 @@ class GaussianDiffusion:
         This uses the conditioning strategy from Sohl-Dickstein et al. (2015).
         """
         gradient = cond_fn(x, self._scale_timesteps(t), **model_kwargs)
+        logger.logkv("cond_norm", th.norm(gradient).item())
+        logger.dumpkvs()
         new_mean = (
             p_mean_var["mean"].float() + p_mean_var["variance"] * gradient.float()
         )
@@ -381,9 +383,12 @@ class GaussianDiffusion:
         alpha_bar = _extract_into_tensor(self.alphas_cumprod, t, x.shape)
 
         eps = self._predict_eps_from_xstart(x, t, p_mean_var["pred_xstart"])
-        eps = eps - (1 - alpha_bar).sqrt() * cond_fn(
-            x, self._scale_timesteps(t), **model_kwargs
-        )
+        cond = cond_fn(x, self._scale_timesteps(t), **model_kwargs)
+        logger.logkv("cond_norm", th.norm(cond).item())
+        logger.logkv("eps_norm", th.norm(eps).item())
+        
+        logger.dumpkvs() 
+        eps = eps - (1 - alpha_bar).sqrt() * cond
 
         out = p_mean_var.copy()
         out["pred_xstart"] = self._predict_xstart_from_eps(x, t, eps)
@@ -470,6 +475,7 @@ class GaussianDiffusion:
         :return: a non-differentiable batch of samples.
         """
         final = None
+        samples = []
         for sample in self.p_sample_loop_progressive(
             model,
             shape,
@@ -482,7 +488,9 @@ class GaussianDiffusion:
             progress=progress,
         ):
             final = sample
-        return final["sample"]
+            samples.append(sample["sample"])
+        return final["sample"], samples
+
 
     def p_sample_loop_progressive(
         self,
@@ -641,6 +649,7 @@ class GaussianDiffusion:
         Same usage as p_sample_loop().
         """
         final = None
+        samples = []
         for sample in self.ddim_sample_loop_progressive(
             model,
             shape,
@@ -654,7 +663,8 @@ class GaussianDiffusion:
             eta=eta,
         ):
             final = sample
-        return final["sample"]
+            samples.append(sample["sample"])
+        return final["sample"], samples
 
     def ddim_sample_loop_progressive(
         self,
