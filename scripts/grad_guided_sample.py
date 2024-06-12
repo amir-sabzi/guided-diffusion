@@ -15,7 +15,7 @@ import os
 import imageio
 
 
-from guided_diffusion import dist_util, logger
+from guided_diffusion import sg_util, logger
 from guided_diffusion.image_datasets import load_data
 from guided_diffusion.script_util import (
     NUM_CLASSES,
@@ -79,9 +79,9 @@ def create_gif(images_array, filename, gif_dir, duration=0.4):
 def main():
     args = create_argparser().parse_args()
 
-    dist_util.setup_dist()
+    # dist_util.setup_dist()
 
-    log_dir = dir = os.path.join(
+    log_dir = os.path.join(
             "logs",
             datetime.datetime.now().strftime("openai-%Y-%m-%d-%H-%M-%S-%f"),
         ) 
@@ -97,9 +97,9 @@ def main():
         **args_to_dict(args, model_and_diffusion_defaults().keys())
     )
     model.load_state_dict(
-        dist_util.load_state_dict(args.model_path, map_location="cpu")
+        sg_util.load_state_dict(args.model_path, map_location="cpu")
     )
-    model.to(dist_util.dev())
+    model.to(sg_util.dev())
     if args.use_fp16:
         model.convert_to_fp16()
 
@@ -108,9 +108,9 @@ def main():
     logger.log("loading classifier...")
     classifier = create_classifier(**args_to_dict(args, classifier_defaults().keys()))
     classifier.load_state_dict(
-        dist_util.load_state_dict(args.classifier_path, map_location="cpu")
+        sg_util.load_state_dict(args.classifier_path, map_location="cpu")
     )
-    classifier.to(dist_util.dev())
+    classifier.to(sg_util.dev())
     if args.classifier_use_fp16:
         classifier.convert_to_fp16()
     classifier.eval()
@@ -173,7 +173,7 @@ def main():
     for i in range(args.num_samples):
         model_kwargs = {}
         classes = th.randint(
-            low=0, high=NUM_CLASSES, size=(args.batch_size,), device=dist_util.dev()
+            low=0, high=NUM_CLASSES, size=(args.batch_size,), device=sg_util.dev()
         )
         x, extra = next(data_iter)
         y = extra["y"]
@@ -181,7 +181,7 @@ def main():
         
 
         # put data and labels on the same device as the model
-        model_kwargs["x_0"], model_kwargs["y"] = x.to(dist_util.dev()), y.to(dist_util.dev()) 
+        model_kwargs["x_0"], model_kwargs["y"] = x.to(sg_util.dev()), y.to(sg_util.dev()) 
            
         
          
@@ -197,7 +197,7 @@ def main():
             clip_denoised=args.clip_denoised,
             model_kwargs=model_kwargs,
             cond_fn=cond_fn,
-            device=dist_util.dev(),
+            device=sg_util.dev(),
         )
 
         save_images(x, f"original_{i}.png", plot_dir)

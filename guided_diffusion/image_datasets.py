@@ -43,7 +43,7 @@ def load_data(
         # Assume classes are the first part of the filename,
         # before an underscore.
         
-        class_names = [os.basename(path).split("_")[0] for path in all_files]
+        class_names = [os.path.basename(path).split("_")[0] for path in all_files]
         sorted_classes = {x: i for i, x in enumerate(sorted(set(class_names)))}
         classes = [sorted_classes[x] for x in class_names]
     dataset = ImageDataset(
@@ -51,7 +51,7 @@ def load_data(
         all_files,
         classes=classes,
         shard=0, # Set shard to 0 as there's only one process
-        num_shards=MPI.COMM_WORLD.Get_size(), # Set num_shards to 1 as there's only one process
+        num_shards=1, # Set num_shards to 1 as there's only one process
         random_crop=random_crop,
         random_flip=random_flip,
     )
@@ -71,11 +71,11 @@ def load_data(
 def _list_image_files_recursively(data_dir):
     results = []
     for entry in sorted(os.listdir(data_dir)):
-        full_path = os.join(data_dir, entry)
+        full_path = os.path.join(data_dir, entry)
         ext = entry.split(".")[-1]
         if "." in entry and ext.lower() in ["jpg", "jpeg", "png", "gif"]:
             results.append(full_path)
-        elif os.isdir(full_path):
+        elif os.path.isdir(full_path):
             results.extend(_list_image_files_recursively(full_path))
     return results
 

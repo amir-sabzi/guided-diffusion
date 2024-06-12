@@ -6,3 +6,5 @@ classify_image_graph_def.pb
 *.pt
 
 
+logs/*
+guided_diffusion.egg-info/PKG-INFO
