@@ -1,3 +1,4 @@
+cd ../..
 python scripts/grad_guided_sample.py \
   --attention_resolutions 32,16,8 \
   --class_cond True \
