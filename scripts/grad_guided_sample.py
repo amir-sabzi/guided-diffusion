@@ -143,7 +143,7 @@ def main():
         
         return grad_params_tensor
 
-    def cond_fn(x_t, t, y=None, x_0=None): 
+    def cond_fn(x_t, t, y=None, x_0=None, s=None): 
         # return 0
         with th.enable_grad():
             # Ensure x_t and x_0 are not detached and have requires_grad=True
@@ -160,53 +160,58 @@ def main():
             # Score function is the \|grads_x_t - grads_x_0\|_2^2
             score_fn = th.norm(grads_x_t - grads_x_0, p=2)**2
             logger.logkv("score_fn", score_fn.item())
+            logger.logkv("scale", s.item()) 
             # logger.dumpkvs()
             # print("score_fn:", score_fn)
-            scores = th.autograd.grad(score_fn, x_t, retain_graph=True)[0] * args.classifier_scale
+            scores = th.autograd.grad(score_fn, x_t, retain_graph=True)[0] 
+            logger.logkv("score norm", th.norm(scores, p=2).item())
+            scores = scores * s
             return scores
              
-    def model_fn(x, t, y=None, x_0=None):
-        return model(x, t, y, x_0)
+    def model_fn(x, t, y=None, x_0=None, s=None):
+        return model(x, t, y, x_0, s)
 
     logger.log("sampling...")
     plot_dir = os.path.join(log_dir, "plots")   
-    for i in range(args.num_samples):
-        model_kwargs = {}
-        classes = th.randint(
-            low=0, high=NUM_CLASSES, size=(args.batch_size,), device=sg_util.dev()
-        )
-        x, extra = next(data_iter)
-        y = extra["y"]
+    classifier_scales = args.classifier_scales 
+    classifier_scales = th.tensor([float(x) for x in classifier_scales.split(",")]) if classifier_scales else th.tensor([0.0])
+    for classifier_scale in classifier_scales:    
+        for i in range(args.num_samples):
+            model_kwargs = {}
+            classes = th.randint(
+                low=0, high=NUM_CLASSES, size=(args.batch_size,), device=sg_util.dev()
+            )
+            x, extra = next(data_iter)
+            y = extra["y"]
+            
 
-        
+            # put data and labels on the same device as the model
+            model_kwargs["x_0"], model_kwargs["y"], model_kwargs["s"] = x.to(sg_util.dev()), y.to(sg_util.dev()), classifier_scale.to(sg_util.dev()) 
+            
+            
+            
 
-        # put data and labels on the same device as the model
-        model_kwargs["x_0"], model_kwargs["y"] = x.to(sg_util.dev()), y.to(sg_util.dev()) 
-           
-        
-         
+            sample_fn = (
+                diffusion.p_sample_loop if not args.use_ddim else diffusion.ddim_sample_loop
+            )
+            
+            
+            sample, diffusion_step = sample_fn(
+                model_fn,
+                (args.batch_size, 3, args.image_size, args.image_size),
+                clip_denoised=args.clip_denoised,
+                model_kwargs=model_kwargs,
+                cond_fn=cond_fn,
+                device=sg_util.dev(),
+            )
 
-        sample_fn = (
-            diffusion.p_sample_loop if not args.use_ddim else diffusion.ddim_sample_loop
-        )
-        
-        
-        sample, diffusion_step = sample_fn(
-            model_fn,
-            (args.batch_size, 3, args.image_size, args.image_size),
-            clip_denoised=args.clip_denoised,
-            model_kwargs=model_kwargs,
-            cond_fn=cond_fn,
-            device=sg_util.dev(),
-        )
+            save_images(x, f"original_{i}_s{classifier_scale}.png", plot_dir)
 
-        save_images(x, f"original_{i}.png", plot_dir)
+            save_images(sample, f"sample_{i}_s{classifier_scale}.png", plot_dir) 
 
-        save_images(sample, f"sample_{i}.png", plot_dir) 
+            create_gif(diffusion_step, f"diffusion_{i}_s{classifier_scale}.gif", plot_dir)
 
-        create_gif(diffusion_step, f"diffusion_{i}.gif", plot_dir)
-
-        logger.log(f"created {i+1} samples")
+            logger.log(f"created {i+1} samples")
 
 
     dist.barrier()
@@ -222,7 +227,7 @@ def create_argparser():
         use_ddim=False,
         model_path="",
         classifier_path="",
-        classifier_scale=1.0,
+        classifier_scales="",
     )
     defaults.update(model_and_diffusion_defaults())
     defaults.update(classifier_defaults())

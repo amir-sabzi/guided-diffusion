@@ -363,7 +363,7 @@ class GaussianDiffusion:
         This uses the conditioning strategy from Sohl-Dickstein et al. (2015).
         """
         gradient = cond_fn(x, self._scale_timesteps(t), **model_kwargs)
-        logger.logkv("cond_norm", th.norm(gradient).item())
+        logger.logkv("p_mean norm", th.norm(p_mean_var["mean"]).item())
         logger.dumpkvs()
         new_mean = (
             p_mean_var["mean"].float() + p_mean_var["variance"] * gradient.float()
@@ -384,7 +384,6 @@ class GaussianDiffusion:
 
         eps = self._predict_eps_from_xstart(x, t, p_mean_var["pred_xstart"])
         cond = cond_fn(x, self._scale_timesteps(t), **model_kwargs)
-        logger.logkv("cond_norm", th.norm(cond).item())
         logger.logkv("eps_norm", th.norm(eps).item())
         
         logger.dumpkvs() 
