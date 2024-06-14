@@ -8,3 +8,4 @@ classify_image_graph_def.pb
 
 logs/*
 guided_diffusion.egg-info/PKG-INFO
+compute_canada/gdg/*
