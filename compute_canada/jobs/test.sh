@@ -6,7 +6,7 @@ python scripts/grad_guided_sample.py \
   --use_ddim False \
   --image_size 64 \
   --batch_size 1 \
-  --data_dir /home/amirsabzi/data/imagenet/ILSVRC/Data/CLS-LOC/train \
+  --data_dir /home/sabzi/scratch/data/ImageNet/dir1 \
   --learn_sigma True \
   --noise_schedule cosine \
   --num_channels 192 \
@@ -16,7 +16,7 @@ python scripts/grad_guided_sample.py \
   --use_new_attention_order True \
   --use_fp16 True \
   --use_scale_shift_norm True \
-  --classifier_scale 0.0 \
+  --classifier_scales 32,16,8 \
   --num_samples 1 \
   --classifier_path models/64x64_classifier.pt \
   --classifier_depth 4 \
