@@ -3,13 +3,13 @@ channels:
   - pytorch
   - defaults
 dependencies:
-  - python=3.8.5
-  - pip=20.3
+  - python=3.10.2
+  - pip=24.0
   - cudatoolkit=11.0
-  - pytorch=1.7.0
-  - torchvision=0.8.1
-  - numpy=1.19.2
-  - matplotlib
-  - imageio
+  - pytorch=2.0.1
+  - torchvision=0.15.2
+  - numpy=1.25.2
+  - matplotlib=3.7.2
+  - imageio=2.34.1
   - pip:
     - -e .
