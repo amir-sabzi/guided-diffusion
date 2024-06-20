@@ -2,8 +2,9 @@ name: gdg
 channels:
   - pytorch
   - defaults
+  - conda-forge
 dependencies:
-  - python=3.10.2
+  - python=3.10.4
   - pip=24.0
   - cudatoolkit=11.0
   - pytorch=2.0.1

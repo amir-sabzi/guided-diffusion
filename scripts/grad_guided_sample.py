@@ -12,6 +12,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import datetime
 import os
+import pandas as pd
 import imageio
 
 
@@ -29,31 +30,92 @@ from guided_diffusion.script_util import (
 
 
 
-def save_images(images, filename, plot_dir):
+def round_to_nearest_i_times_10x(scale):
+    if scale == 0:
+        return 0, 0
+    
+    exponent = int(np.floor(np.log10(scale)))
+    coefficient = scale / (10 ** exponent)
+    # print("coefficient:", coefficient)
+    rounded_coefficient = round(coefficient)
+    # print("rounded_coefficient:", rounded_coefficient)
+    return rounded_coefficient, exponent
+
+def plot_score(data_dir, num_iters, diffusion_steps):
+    csv_file = os.path.join(data_dir, "progress.csv")
+    # read the csv file at data dir
+    with open(csv_file, mode='r') as file:
+        df = pd.read_csv(file)
+
+    # get unique scales
+    scales = df['scale'].unique()
+    for scale in scales:
+        # get the data for each scale
+        df_scale = df[df['scale'] == scale].reset_index()
+
+        # round the scale to 2 decimal places 
+        rounded_coefficient, exponent = round_to_nearest_i_times_10x(scale)
+        
+       
+        label = f"scale: {rounded_coefficient}e{exponent}" 
+        score_fn = np.zeros(diffusion_steps) 
+        for i in range(num_iters):
+            if df_scale['score_fn'][i*diffusion_steps:(i+1)*diffusion_steps].isna().any():
+                label = f"scale: {rounded_coefficient}e{exponent}, FAILED"
+
+            score_fn += df_scale['score_fn'][i*diffusion_steps:(i+1)*diffusion_steps].to_numpy()
+        
+        score_fn = score_fn / num_iters   
+        
+        # plot the score_fn vs index for each scale
+        plt.plot(range(diffusion_steps), score_fn, label=label)  
+        
+    plt.xlabel('diffusion step')
+    plt.ylabel('Gradient l2 difference')
+    plt.yscale('log')  # Set y-axis to logarithmic scale
+    plt.legend()
+    plt.savefig(os.path.join(data_dir, "plots", "score_fn.png"))
+    plt.close() 
+
+
+
+
+
+def save_images(original, samples, filename, plot_dir):
     """
-    Saves a batch of images to the specified directory.
+    Saves a batch of images and their corresponding samples to the specified directory.
     
     Args:
-    images (Tensor): Batch of images.
+    original (Tensor): Batch of original images.
+    samples (Tensor): Batch of sampled images.
     filename (str): Filename for the saved plot.
     plot_dir (str): Directory to save the plots.
     """
-    images = ((images + 1) * 127.5).clamp(0, 255).to(th.uint8)
-    images = images.permute(0, 2, 3, 1)
-    images = images.contiguous().cpu().numpy()
+    original = ((original + 1) * 127.5).clamp(0, 255).to(th.uint8)
+    samples = ((samples + 1) * 127.5).clamp(0, 255).to(th.uint8)
+    
+    original = original.permute(0, 2, 3, 1).contiguous().cpu().numpy()
+    samples = samples.permute(0, 2, 3, 1).contiguous().cpu().numpy()
+    
     # Create a directory for plots if it doesn't exist
     os.makedirs(plot_dir, exist_ok=True)
     
     # Plot and save images
-    num_images = len(images)
-    fig, axs = plt.subplots(1, num_images, figsize=(num_images * 2, 2))
+    num_images = len(original)
+    fig, axs = plt.subplots(2, num_images, figsize=(num_images * 2, 4))
+    
     if num_images == 1:
-        axs = [axs]  # Make it iterable if there's only one subplot
-    for i, img in enumerate(images):
-        axs[i].imshow(img)
-        axs[i].axis('off')
+        axs = [[axs[0]], [axs[1]]]  # Make it iterable if there's only one subplot
+
+    for i in range(num_images):
+        axs[0][i].imshow(original[i])
+        axs[0][i].axis('off')
+        axs[1][i].imshow(samples[i])
+        axs[1][i].axis('off')
+    
     plt.savefig(os.path.join(plot_dir, filename))
     plt.close(fig)
+ 
     
 def create_gif(images_array, filename, gif_dir, duration=0.4):
     """
@@ -69,23 +131,42 @@ def create_gif(images_array, filename, gif_dir, duration=0.4):
     os.makedirs(gif_dir, exist_ok=True)
     
     # Transform each image in images_array to numpy arrays with shape (64, 64, 3)
-    images_array = [((image.squeeze(0) + 1) * 127.5).clamp(0, 255).to(th.uint8).permute(1, 2, 0).contiguous().cpu().numpy() for image in images_array]
+    images_array = [((image + 1) * 127.5).clamp(0, 255).to(th.uint8).permute(1, 2, 0).contiguous().cpu().numpy() for image in images_array]
     # Save frames as GIF
 
+    
     gif_path = os.path.join(gif_dir, filename)
     imageio.mimsave(gif_path, images_array, duration=duration)
 
+def get_finename(scale, iteration, prefix=""):
+    if scale == 0:
+        return f"{prefix}_iter={iteration}_s=0.png"
+    # map tensor to float
+    scale = scale.item()
+    rounded_coefficient, exponent = round_to_nearest_i_times_10x(scale)
+    return f"{prefix}_iter={iteration}_s={rounded_coefficient}e{exponent}.png" 
 
 def main():
+
+
     args = create_argparser().parse_args()
 
-    # dist_util.setup_dist()
+    # log_dir = "/home/amirsabzi/workspace/guided-diffusion/scales/gdg-2024-06-15-11-58-47-193957/"
 
-    log_dir = os.path.join(
-            "logs",
-            datetime.datetime.now().strftime("openai-%Y-%m-%d-%H-%M-%S-%f"),
-        ) 
+    # plot_score(log_dir, args.num_iters, args.diffusion_steps)
     
+    # return
+    # dist_util.setup_dist()
+    if args.log_dir: 
+        log_dir_root = args.log_dir
+    else: 
+        log_dir_root = "logs";
+    
+    log_dir = os.path.join(
+            log_dir_root,
+            datetime.datetime.now().strftime("gdg-%Y-%m-%d-%H-%M-%S-%f"),
+        ) 
+    print(log_dir) 
     os.makedirs(log_dir, exist_ok=True) 
     logger.configure(dir=log_dir)
 
@@ -161,6 +242,7 @@ def main():
             score_fn = th.norm(grads_x_t - grads_x_0, p=2)**2
             logger.logkv("score_fn", score_fn.item())
             logger.logkv("scale", s.item()) 
+            logger.dumpkvs()
             # logger.dumpkvs()
             # print("score_fn:", score_fn)
             scores = th.autograd.grad(score_fn, x_t, retain_graph=True)[0] 
@@ -175,8 +257,8 @@ def main():
     plot_dir = os.path.join(log_dir, "plots")   
     classifier_scales = args.classifier_scales 
     classifier_scales = th.tensor([float(x) for x in classifier_scales.split(",")]) if classifier_scales else th.tensor([0.0])
-    for classifier_scale in classifier_scales:    
-        for i in range(args.num_samples):
+    for scale in classifier_scales:    
+        for i in range(args.num_iters):
             model_kwargs = {}
             classes = th.randint(
                 low=0, high=NUM_CLASSES, size=(args.batch_size,), device=sg_util.dev()
@@ -186,7 +268,7 @@ def main():
             
 
             # put data and labels on the same device as the model
-            model_kwargs["x_0"], model_kwargs["y"], model_kwargs["s"] = x.to(sg_util.dev()), y.to(sg_util.dev()), classifier_scale.to(sg_util.dev()) 
+            model_kwargs["x_0"], model_kwargs["y"], model_kwargs["s"] = x.to(sg_util.dev()), y.to(sg_util.dev()), scale.to(sg_util.dev()) 
             
             
             
@@ -194,8 +276,7 @@ def main():
             sample_fn = (
                 diffusion.p_sample_loop if not args.use_ddim else diffusion.ddim_sample_loop
             )
-            
-            
+
             sample, diffusion_step = sample_fn(
                 model_fn,
                 (args.batch_size, 3, args.image_size, args.image_size),
@@ -205,24 +286,18 @@ def main():
                 device=sg_util.dev(),
             )
 
-            save_images(x, f"original_{i}_s{classifier_scale}.png", plot_dir)
-
-            save_images(sample, f"sample_{i}_s{classifier_scale}.png", plot_dir) 
-
-            create_gif(diffusion_step, f"diffusion_{i}_s{classifier_scale}.gif", plot_dir)
-
-            logger.log(f"created {i+1} samples")
+            save_images(x, sample, get_finename(scale, i, "data"), plot_dir) 
 
 
-    dist.barrier()
     logger.log("sampling complete")
-
+    plot_score(log_dir, args.num_iters, args.diffusion_steps)
 
 def create_argparser():
     defaults = dict(
         data_dir="",
+        log_dir="",
         clip_denoised=True,
-        num_samples=10000,
+        num_iters=100,
         batch_size=16,
         use_ddim=False,
         model_path="",

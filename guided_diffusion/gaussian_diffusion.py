@@ -363,8 +363,6 @@ class GaussianDiffusion:
         This uses the conditioning strategy from Sohl-Dickstein et al. (2015).
         """
         gradient = cond_fn(x, self._scale_timesteps(t), **model_kwargs)
-        logger.logkv("p_mean norm", th.norm(p_mean_var["mean"]).item())
-        logger.dumpkvs()
         new_mean = (
             p_mean_var["mean"].float() + p_mean_var["variance"] * gradient.float()
         )
@@ -435,10 +433,15 @@ class GaussianDiffusion:
         nonzero_mask = (
             (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
         )  # no noise when t == 0
-        if cond_fn is not None:
-            out["mean"] = self.condition_mean(
+
+        cond_out = self.condition_mean(
                 cond_fn, out, x, t, model_kwargs=model_kwargs
             )
+
+        if model_kwargs["s"] != 0:
+            out["mean"] = cond_out
+
+
         sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
         return {"sample": sample, "pred_xstart": out["pred_xstart"]}
 

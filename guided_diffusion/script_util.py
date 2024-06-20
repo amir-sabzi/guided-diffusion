@@ -1,5 +1,6 @@
 import argparse
 import inspect
+from torchvision import models
 
 from . import gaussian_diffusion as gd
 from .respace import SpacedDiffusion, space_timesteps
@@ -37,6 +38,19 @@ def classifier_defaults():
         classifier_use_scale_shift_norm=True,  # False
         classifier_resblock_updown=True,  # False
         classifier_pool="attention",
+    )
+
+
+def target_model_defaults():
+    """
+    Defaults for target model training.
+    """
+    return dict(
+        model_name="resnet50",
+        pretrained=False,
+        progress=True,
+        num_classes=1000,
+        width_per_group=64,
     )
 
 
@@ -142,7 +156,6 @@ def create_model_and_diffusion(
     )
     return model, diffusion
 
-
 def create_model(
     image_size,
     num_channels,
@@ -240,6 +253,32 @@ def create_classifier_and_diffusion(
     )
     return classifier, diffusion
 
+# TODO: Modify this function to return the resnet model if its needed
+
+def create_target_model(
+    model_name: str, 
+    pretrained: bool = False,
+    progress: bool = True, 
+    num_classes: int = 1000,
+    width_per_group: int = 64,
+):
+    
+    
+    if model_name == "resnet50":
+        
+        if pretrained:
+            weights = 'imagenet'
+        else:
+            weights = None
+
+        return models.resnet50(
+            weights=weights,
+            progress=progress,
+            num_classes=num_classes,
+            width_per_group=width_per_group)
+    else:
+        raise ValueError(f"unsupported model name: {model_name}")
+
 
 def create_classifier(
     image_size,
@@ -251,6 +290,8 @@ def create_classifier(
     classifier_resblock_updown,
     classifier_pool,
 ):
+
+        
     if image_size == 512:
         channel_mult = (0.5, 1, 1, 2, 2, 4, 4)
     elif image_size == 256:

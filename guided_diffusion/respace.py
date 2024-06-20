@@ -74,6 +74,9 @@ class SpacedDiffusion(GaussianDiffusion):
         self.timestep_map = []
         self.original_num_steps = len(kwargs["betas"])
 
+        
+        #NOTE: What does base_diffusion do?
+        # It seems it is not a model but it only provides utility functions for the the model such as p_mean_variance, training_losses, condition_mean, condition_score. All of these functions also receive the model as an argument.
         base_diffusion = GaussianDiffusion(**kwargs)  # pylint: disable=missing-kwoa
         last_alpha_cumprod = 1.0
         new_betas = []
