@@ -89,21 +89,21 @@ def main():
 
 
     logger.log("creating data loader...") 
-    data = iter(load_data(
+    data = load_data(
 
         data_dir=args.data_dir,
         batch_size=args.batch_size,
         image_size=args.image_size,
         class_cond=True,
-    ))
+    )
     
     if args.val_data_dir:
-        val_data = iter(load_data(
+        val_data = load_data(
             data_dir=args.val_data_dir,
             batch_size=args.batch_size,
             image_size=args.image_size,
             class_cond=True,
-        ))
+        )
     else:
         val_data = None 
 
@@ -151,8 +151,8 @@ def main():
         
             
              
-    # TODO: Implement checkpointing later    
-    for step in range(args.iterations):
+    # TODO: Implement laoding from checkpoints later    
+    for step in range(args.num_iters):
         forward_backward_log(data, prefix="train")
         if val_data is not None and not step % args.eval_interval:
             with th.no_grad():
@@ -170,7 +170,7 @@ def create_argparser():
         val_data_dir="",
         log_dir="",
         noised=True,
-        iterations=150000,
+        num_iters=150000,
         lr=3e-4,
         weight_decay=0.0,
         microbatch=-1,
@@ -202,6 +202,6 @@ python scripts/target_train.py \
   --progress False \
   --num_classes 100 \
   --batch_size 64 \
-  --iterations 5000 \
+  --num_iters 5000 \
   --lr 0.01
 '''

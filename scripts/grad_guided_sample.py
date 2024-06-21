@@ -21,9 +21,9 @@ from guided_diffusion.image_datasets import load_data
 from guided_diffusion.script_util import (
     NUM_CLASSES,
     model_and_diffusion_defaults,
-    classifier_defaults,
+    target_model_defaults,
     create_model_and_diffusion,
-    create_classifier,
+    create_target_model,
     add_dict_to_argparser,
     args_to_dict,
 )
@@ -166,7 +166,6 @@ def main():
             log_dir_root,
             datetime.datetime.now().strftime("gdg-%Y-%m-%d-%H-%M-%S-%f"),
         ) 
-    print(log_dir) 
     os.makedirs(log_dir, exist_ok=True) 
     logger.configure(dir=log_dir)
 
@@ -186,15 +185,16 @@ def main():
 
     model.eval()
 
-    logger.log("loading classifier...")
-    classifier = create_classifier(**args_to_dict(args, classifier_defaults().keys()))
-    classifier.load_state_dict(
-        sg_util.load_state_dict(args.classifier_path, map_location="cpu")
-    )
-    classifier.to(sg_util.dev())
-    if args.classifier_use_fp16:
-        classifier.convert_to_fp16()
-    classifier.eval()
+    logger.log("loading target model...")
+    target_model = create_target_model(**args_to_dict(args, target_model_defaults().keys()))
+
+    
+    checkpoint = th.load(args.target_model_path, map_location="cpu") 
+     
+    target_model.load_state_dict(checkpoint['model_state_dict']) 
+
+    target_model.to(sg_util.dev())
+    target_model.eval()
 
     
     logger.log("creating data loader...")
@@ -203,17 +203,17 @@ def main():
         class_cond=True,
         random_crop=False,
     )
-    data_iter = iter(data)
+    # data_iter = iter(data)
 
     def get_grads(x, y): 
         x.requires_grad = True
-        t = th.zeros(x.size(0), device=x.device)
-        logits = classifier(x, t)
+        # t = th.zeros(x.size(0), device=x.device)
+        logits = target_model(x)
         loss = F.cross_entropy(logits, y)
 
 
     
-        params = list(classifier.parameters())
+        params = list(target_model.parameters())
         grad_params = th.autograd.grad(loss, params, create_graph=True)
         grad_params_tensor = th.cat([grad_param.view(-1) for grad_param in grad_params]) 
         
@@ -260,10 +260,8 @@ def main():
     for scale in classifier_scales:    
         for i in range(args.num_iters):
             model_kwargs = {}
-            classes = th.randint(
-                low=0, high=NUM_CLASSES, size=(args.batch_size,), device=sg_util.dev()
-            )
-            x, extra = next(data_iter)
+
+            x, extra = next(data)
             y = extra["y"]
             
 
@@ -301,11 +299,11 @@ def create_argparser():
         batch_size=16,
         use_ddim=False,
         model_path="",
-        classifier_path="",
+        target_model_path="",
         classifier_scales="",
     )
     defaults.update(model_and_diffusion_defaults())
-    defaults.update(classifier_defaults())
+    defaults.update(target_model_defaults())
     parser = argparse.ArgumentParser()
     add_dict_to_argparser(parser, defaults)
     return parser

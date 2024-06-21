@@ -46,7 +46,7 @@ def target_model_defaults():
     Defaults for target model training.
     """
     return dict(
-        model_name="resnet50",
+        target_model_name="resnet50",
         pretrained=False,
         progress=True,
         num_classes=1000,
@@ -256,7 +256,7 @@ def create_classifier_and_diffusion(
 # TODO: Modify this function to return the resnet model if its needed
 
 def create_target_model(
-    model_name: str, 
+    target_model_name: str, 
     pretrained: bool = False,
     progress: bool = True, 
     num_classes: int = 1000,
@@ -264,7 +264,7 @@ def create_target_model(
 ):
     
     
-    if model_name == "resnet50":
+    if target_model_name == "resnet50":
         
         if pretrained:
             weights = 'imagenet'
@@ -277,7 +277,7 @@ def create_target_model(
             num_classes=num_classes,
             width_per_group=width_per_group)
     else:
-        raise ValueError(f"unsupported model name: {model_name}")
+        raise ValueError(f"unsupported model name: {target_model_name}")
 
 
 def create_classifier(
