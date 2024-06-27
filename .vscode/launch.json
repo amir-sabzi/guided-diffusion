@@ -126,6 +126,39 @@
         "--iterations", "10",
         "--lr", "0.01"
       ]
+    },
+    {
+      "name": "Fisuion Sample",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/fiusion_sample.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
+      "env": {
+        "CONDA_ENV_PATH": "${env:CONDA_PREFIX}"
+      },
+      "envFile": "${workspaceFolder}/.env",
+      "args": [
+        "--data_dir", "/home/amirsabzi/data/mathias/samples",
+        "--log_dir", "debug",
+        "--model_path", "models/256x256_diffusion.pt",
+        "--attention_resolutions", "32,16,8",
+        "--class_cond", "True",
+        "--diffusion_steps", "1000",
+        "--dropout", "0.1",
+        "--image_size", "256",
+        "--learn_sigma", "False",
+        "--noise_schedule", "cosine",
+        "--num_channels", "192",
+        "--num_head_channels", "64",
+        "--num_res_blocks", "3",
+        "--resblock_updown", "True",
+        "--use_new_attention_order", "True",
+        "--use_fp16", "True",
+        "--use_scale_shift_norm", "True",
+        "--num_samples", "6",
+        "--sample_save_freq", "100"
+      ]
     }
   ]
 }
