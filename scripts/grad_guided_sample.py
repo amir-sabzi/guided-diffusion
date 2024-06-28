@@ -4,6 +4,7 @@ process towards more realistic images.
 """
 
 import argparse
+from unittest import result
 
 import numpy as np
 import torch as th
@@ -81,37 +82,42 @@ def plot_score(data_dir, num_iters, diffusion_steps):
 
 
 
-def save_images(original, samples, filename, plot_dir):
+def save_images(results, num_rows, num_cols, filename, plot_dir):
     """
     Saves a batch of images and their corresponding samples to the specified directory.
     
     Args:
-    original (Tensor): Batch of original images.
-    samples (Tensor): Batch of sampled images.
+    results (dict): Dictionary containing the original images and their corresponding samples.
+    num_rows (int): Number of rows in the plot.
+    num_cols (int): Number of columns in the plot.
     filename (str): Filename for the saved plot.
-    plot_dir (str): Directory to save the plots.
+    plot_dir (str): Directory to save the plots.    
+
     """
-    original = ((original + 1) * 127.5).clamp(0, 255).to(th.uint8)
-    samples = ((samples + 1) * 127.5).clamp(0, 255).to(th.uint8)
-    
-    original = original.permute(0, 2, 3, 1).contiguous().cpu().numpy()
-    samples = samples.permute(0, 2, 3, 1).contiguous().cpu().numpy()
-    
-    # Create a directory for plots if it doesn't exist
+
+
     os.makedirs(plot_dir, exist_ok=True)
     
     # Plot and save images
-    num_images = len(original)
-    fig, axs = plt.subplots(2, num_images, figsize=(num_images * 2, 4))
+    fig, axs = plt.subplots(num_rows, num_cols, figsize=(15, 15))
+    keys = list(results.keys()) 
+    for i in range(num_rows):
+        data = results[keys[i]]
+        data = ((data + 1) * 127.5).clamp(0, 255).to(th.uint8)
+        data = data.permute(0, 2, 3, 1).contiguous().cpu().numpy()
+        for j in range(num_cols):
+            axs[i][j].imshow(data[j])
+            axs[i][j].axis('off')
     
-    if num_images == 1:
-        axs = [[axs[0]], [axs[1]]]  # Make it iterable if there's only one subplot
-
-    for i in range(num_images):
-        axs[0][i].imshow(original[i])
-        axs[0][i].axis('off')
-        axs[1][i].imshow(samples[i])
-        axs[1][i].axis('off')
+    
+     
+    for row in range(num_rows):
+        if keys[row] == "x":
+            axs[row, 0].text(-20, 128, 'data', rotation=90, fontsize=16, va='center')
+        else:
+            scale = keys[row].item()
+            c, e = round_to_nearest_i_times_10x(scale) 
+            axs[row, 0].text(-20, 128, f'sample, s={c}e{e}', rotation=90, fontsize=16, va='center') 
     
     plt.savefig(os.path.join(plot_dir, filename))
     plt.close(fig)
@@ -257,14 +263,17 @@ def main():
     plot_dir = os.path.join(log_dir, "plots")   
     classifier_scales = args.classifier_scales 
     classifier_scales = th.tensor([float(x) for x in classifier_scales.split(",")]) if classifier_scales else th.tensor([0.0])
-    for scale in classifier_scales:    
-        for i in range(args.num_iters):
-            model_kwargs = {}
+    for i in range(args.num_iters):
+        model_kwargs = {}
 
-            x, extra = next(data)
-            y = extra["y"]
-            
+        x, extra = next(data)
+        y = extra["y"]
 
+        results = {}
+        results["x"] = x
+        for scale in classifier_scales: 
+        
+        
             # put data and labels on the same device as the model
             model_kwargs["x_0"], model_kwargs["y"], model_kwargs["s"] = x.to(sg_util.dev()), y.to(sg_util.dev()), scale.to(sg_util.dev()) 
             
@@ -284,9 +293,20 @@ def main():
                 device=sg_util.dev(),
             )
 
-            save_images(x, sample, get_finename(scale, i, "data"), plot_dir) 
+            
+            results[scale] = sample
+            
+        save_images(results,
+                    num_rows = len(classifier_scales) + 1,
+                    num_cols = args.batch_size,
+                    filename = get_finename(0, i, "data"),
+                    plot_dir = plot_dir)
 
 
+    
+    
+    
+    
     logger.log("sampling complete")
     plot_score(log_dir, args.num_iters, args.diffusion_steps)
 
