@@ -435,13 +435,10 @@ class GaussianDiffusion:
             (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
         )  # no noise when t == 0
 
-        cond_out = self.condition_mean(
+        if cond_fn is not None:
+            out["mean"] = self.condition_mean(
                 cond_fn, out, x, t, model_kwargs=model_kwargs
             )
-
-        if model_kwargs["s"] != 0:
-            out["mean"] = cond_out
-
 
         sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
         return {"sample": sample, "pred_xstart": out["pred_xstart"]}

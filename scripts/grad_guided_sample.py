@@ -113,11 +113,11 @@ def save_images(results, num_rows, num_cols, filename, plot_dir):
      
     for row in range(num_rows):
         if keys[row] == "x":
-            axs[row, 0].text(-20, 128, 'data', rotation=90, fontsize=16, va='center')
+            axs[row, 0].text(-40, 128, 'data', rotation=90, fontsize=16, va='center')
         else:
             scale = keys[row].item()
             c, e = round_to_nearest_i_times_10x(scale) 
-            axs[row, 0].text(-20, 128, f'sample, s={c}e{e}', rotation=90, fontsize=16, va='center') 
+            axs[row, 0].text(-20, 128, f's={c}e{e}', rotation=90, fontsize=16, va='center') 
     
     plt.savefig(os.path.join(plot_dir, filename))
     plt.close(fig)
@@ -146,11 +146,11 @@ def create_gif(images_array, filename, gif_dir, duration=0.4):
 
 def get_finename(scale, iteration, prefix=""):
     if scale == 0:
-        return f"{prefix}_iter={iteration}_s=0.png"
+        return f"{prefix}_iter={iteration}_s=0.pdf"
     # map tensor to float
     scale = scale.item()
     rounded_coefficient, exponent = round_to_nearest_i_times_10x(scale)
-    return f"{prefix}_iter={iteration}_s={rounded_coefficient}e{exponent}.png" 
+    return f"{prefix}_iter={iteration}_s={rounded_coefficient}e{exponent}.pdf" 
 
 def main():
 
