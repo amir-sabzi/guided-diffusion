@@ -80,6 +80,11 @@ def plot_score(data_dir, num_iters, diffusion_steps):
 
 
 
+def transform_to_image(image):
+    image = ((image + 1) * 127.5).clamp(0, 255).to(th.uint8)
+    image = image.permute(0, 2, 3, 1).contiguous().cpu().numpy()
+    return image
+
 
 
 def save_images(results, num_rows, num_cols, filename, plot_dir):
@@ -103,8 +108,7 @@ def save_images(results, num_rows, num_cols, filename, plot_dir):
     keys = list(results.keys()) 
     for i in range(num_rows):
         data = results[keys[i]]
-        data = ((data + 1) * 127.5).clamp(0, 255).to(th.uint8)
-        data = data.permute(0, 2, 3, 1).contiguous().cpu().numpy()
+        data = transform_to_image(data)
         for j in range(num_cols):
             axs[i][j].imshow(data[j])
             axs[i][j].axis('off')
@@ -123,7 +127,7 @@ def save_images(results, num_rows, num_cols, filename, plot_dir):
     plt.close(fig)
  
     
-def create_gif(images_array, filename, gif_dir, duration=0.4):
+def create_gif(images_array, filename, gif_dir, batch_size, duration=0.4):
     """
     Create a GIF from a list of images.
     
@@ -137,12 +141,16 @@ def create_gif(images_array, filename, gif_dir, duration=0.4):
     os.makedirs(gif_dir, exist_ok=True)
     
     # Transform each image in images_array to numpy arrays with shape (64, 64, 3)
-    images_array = [((image + 1) * 127.5).clamp(0, 255).to(th.uint8).permute(1, 2, 0).contiguous().cpu().numpy() for image in images_array]
+    # images_array = [((image + 1) * 127.5).clamp(0, 255).to(th.uint8).permute(1, 2, 0).contiguous().cpu().numpy() for image in images_array]
     # Save frames as GIF
-
+    images_array = [transform_to_image(image) for image in images_array]
     
-    gif_path = os.path.join(gif_dir, filename)
-    imageio.mimsave(gif_path, images_array, duration=duration)
+    
+    for i in range(batch_size):
+        images = [image[i] for image in images_array]
+        images = [image for image in images]
+        imageio.mimsave(os.path.join(gif_dir, f"{filename}_{i}.gif"), images, duration=duration) 
+     
 
 def get_finename(scale, iteration, prefix=""):
     if scale == 0:
@@ -230,24 +238,64 @@ def main():
         
         return grad_params_tensor
 
+    
+    
+    def tv_loss(x):
+        diff1 = x[:, :, :, :-1] - x[:, :, :, 1:]
+        diff2 = x[:, :, :-1, :] - x[:, :, 1:, :]
+        diff3 = x[:, :, 1:, :-1] - x[:, :, :-1, 1:]
+        diff4 = x[:, :, :-1, :-1] - x[:, :, 1:, 1:]
+        return th.norm(diff1, p=1) + th.norm(diff2, p=1) + th.norm(diff3, p=1) + th.norm(diff4, p=1)    
+    
+       
+        
     def cond_fn(x_t, t, y=None, x_0=None, s=None): 
         # return 0
+        optimizer = th.optim.Adam([x_t], lr=0.01)
         with th.enable_grad():
             # Ensure x_t and x_0 are not detached and have requires_grad=True
             x_t = x_t.clone().detach().requires_grad_(True)
             x_0 = x_0.clone().detach().requires_grad_(True)
             
+            # log the mean, min, max and standard deviation of the x_t and x_0
+            logger.logkv("x_t_mean", x_t.mean().item())
+            logger.logkv("x_t_min", x_t.min().item())
+            logger.logkv("x_t_max", x_t.max().item())
+            logger.logkv("x_0_mean", x_0.mean().item()) 
+            logger.logkv("x_0_min", x_0.min().item())
+            logger.logkv("x_0_max", x_0.max().item()) 
+             
+            grads_x_0 = get_grads(x_0, y)
+            
+            
+            # Backward guidance 
+            losses = []
+            for _ in range(100):
+                optimizer.zero_grad()
+                grads_x_t = get_grads(x_t, y)
+                loss = F.mse_loss(grads_x_t, grads_x_0) + tv_loss(x_t)
+                loss.backward(retain_graph=True)
+                optimizer.step()
+                losses.append(loss.item()) 
+             
+            grads_x_t = get_grads(x_t, y)
+            
+            
+                        
             # # Debug: Print to ensure tensors have requires_grad=True
             # print("x_t.requires_grad:", x_t.requires_grad)
             # print("x_0.requires_grad:", x_0.requires_grad)
 
-            grads_x_t = get_grads(x_t, y)
-            grads_x_0 = get_grads(x_0, y)
             
-            # Score function is the \|grads_x_t - grads_x_0\|_2^2
-            score_fn = th.norm(grads_x_t - grads_x_0, p=2)**2
+            # Score function is the cosine similarity between grads_x_t and grads_x_0
+            cosine_sim = F.cosine_similarity(grads_x_t, grads_x_0, dim=0)
+            score_fn = (1 - cosine_sim) / 2
+            
+            
+                         
             logger.logkv("score_fn", score_fn.item())
             logger.logkv("scale", s.item()) 
+            logger.logkv("loss", np.mean(losses))
             logger.dumpkvs()
             # logger.dumpkvs()
             # print("score_fn:", score_fn)
@@ -271,8 +319,12 @@ def main():
 
         results = {}
         results["x"] = x
+        # Log the mean, min, max and standard deviation of the input image   
+        print("x_mean:", x.mean().item())
+        print("x_min:", x.min().item())
+        print("x_max:", x.max().item())
+        print("x_std:", x.std().item())
         for scale in classifier_scales: 
-        
         
             # put data and labels on the same device as the model
             model_kwargs["x_0"], model_kwargs["y"], model_kwargs["s"] = x.to(sg_util.dev()), y.to(sg_util.dev()), scale.to(sg_util.dev()) 
@@ -284,7 +336,7 @@ def main():
                 diffusion.p_sample_loop if not args.use_ddim else diffusion.ddim_sample_loop
             )
 
-            sample, diffusion_step = sample_fn(
+            sample, diffusion_step, clean_images = sample_fn(
                 model_fn,
                 (args.batch_size, 3, args.image_size, args.image_size),
                 clip_denoised=args.clip_denoised,
@@ -295,7 +347,9 @@ def main():
 
             
             results[scale] = sample
+            create_gif(clean_images, get_finename(scale, i, "gif"), plot_dir, args.batch_size)
             
+                        
         save_images(results,
                     num_rows = len(classifier_scales) + 1,
                     num_cols = args.batch_size,
@@ -316,7 +370,7 @@ def create_argparser():
         log_dir="",
         clip_denoised=True,
         num_iters=100,
-        batch_size=16,
+        batch_size=4,
         use_ddim=False,
         model_path="",
         target_model_path="",

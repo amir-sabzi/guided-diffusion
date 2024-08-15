@@ -435,13 +435,23 @@ class GaussianDiffusion:
             (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
         )  # no noise when t == 0
 
+
+        
+        x_0_hat = None 
         if cond_fn is not None:
+            B, C = x.shape[:2]
+            model_out = model(x, self._scale_timesteps(t), **model_kwargs)
+            eps_hat, _ = th.split(model_out, C, dim=1)
+            
+            x_0_hat = self._predict_xstart_from_eps(x, t, eps_hat)
+            x_0_hat_clamped = x_0_hat.clamp(-1, 1) 
+                  
             out["mean"] = self.condition_mean(
-                cond_fn, out, x, t, model_kwargs=model_kwargs
+                cond_fn, out, x_0_hat_clamped, t, model_kwargs=model_kwargs
             )
 
         sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
-        return {"sample": sample, "pred_xstart": out["pred_xstart"]}
+        return {"sample": sample, "pred_xstart": out["pred_xstart"], "x_0_hat": x_0_hat}
 
     def p_sample_loop(
         self,
@@ -476,6 +486,7 @@ class GaussianDiffusion:
         """
         final = None
         samples = []
+        clean_images = [] 
         for sample in self.p_sample_loop_progressive(
             model,
             shape,
@@ -489,7 +500,8 @@ class GaussianDiffusion:
         ):
             final = sample
             samples.append(sample["sample"])
-        return final["sample"], samples
+            clean_images.append(sample["x_0_hat"])
+        return final["sample"], samples, clean_images
 
 
     def p_sample_loop_progressive(

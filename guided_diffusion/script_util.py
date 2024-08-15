@@ -49,7 +49,7 @@ def target_model_defaults():
         target_model_name="resnet50",
         pretrained=False,
         progress=True,
-        num_classes=1000,
+        num_classes=None,
         width_per_group=64,
     )
 
@@ -259,7 +259,7 @@ def create_target_model(
     target_model_name: str, 
     pretrained: bool = False,
     progress: bool = True, 
-    num_classes: int = 1000,
+    num_classes: int = 100,
     width_per_group: int = 64,
 ):
     
@@ -274,7 +274,7 @@ def create_target_model(
         return models.resnet50(
             weights=weights,
             progress=progress,
-            num_classes=num_classes,
+            num_classes=100,
             width_per_group=width_per_group)
     else:
         raise ValueError(f"unsupported model name: {target_model_name}")
